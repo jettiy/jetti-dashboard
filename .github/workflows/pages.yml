@@ -10,10 +10,11 @@ permissions:
   pages: write
   id-token: write
 
-# a newer publish replaces a build still running
+# Builds take their turn: a build in progress is never cancelled, and only the newest waiting one is kept.
+# (Cancelling a build in progress now and then left the next one with no artifact to deploy.)
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
