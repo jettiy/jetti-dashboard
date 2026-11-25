@@ -783,12 +783,13 @@ function readHandoff(){
 // filled its money counts as cash, at the fill price; on its fill date it is worth the fill price. The first day is 100.
 // It is a reconstruction, not a valuation, and is replaced day by day by the amounts the admin records (`history.actual`).
 const UNDATED_DAY='2026-11-19'; // Anthropic's first fill has no date on record: read as its first quoted day
-// A position's prices are looked up by its code: the ticker as it is for an overseas name, and with the Korean
-// exchange's suffix for a Korean one. The page holds no list of instruments: which are held is the record's business.
+// A position's prices are looked up by its code, under whichever form the data file carries: a ticker as it is, or with
+// the exchange's suffix — Korea .KS / .KQ, Hong Kong .HK, Tokyo .T, Shenzhen .SZ, Shanghai .SH. The page holds no list
+// of instruments: which are held is the record's business, and what the data file carries follows the record.
 function quoteKey(code){
   if(!code) return null;
-  if(FMP.quote[code]) return code;
-  for(const s of ['.KS','.KQ']) if(FMP.quote[code+s]) return code+s;
+  const c=String(code).trim().toUpperCase(), four=c.padStart(4,'0');
+  for(const k of [c,c+'.KS',c+'.KQ',four+'.HK',four+'.T',c+'.SZ',c+'.SH']) if(FMP.quote[k]) return k;
   return null;
 }
 function fillDays(p,trades){
