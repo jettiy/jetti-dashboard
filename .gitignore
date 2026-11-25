@@ -1,3 +1,5 @@
-# Never published: the member key the admin page leaves here seals the files for members, and is for this PC only
+# Never published: the member key the admin page leaves here seals the files for members, and is for this PC only.
+# So is the list of the instruments held, which it also leaves for the scheduled refresh on this PC alone.
 .member-key
+.instruments.json
 *.tmp
