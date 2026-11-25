@@ -413,6 +413,8 @@ body.gated{overflow:hidden}
 .gate-row input:focus-visible,.gate-row .pill:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .gate-row .pill{flex:none;height:40px;padding:0 var(--s-16);font-size:var(--fs-14)}
 .gate-box .gate-err{min-height:1.6em;margin-top:var(--s-8);color:var(--down)}
+/* not a mistake of the member's but the operator's change of code: said in the ordinary text colour */
+.gate-box .gate-err.note{color:var(--ink2)}
 
 </style>
 <script>
@@ -638,17 +640,19 @@ body.gated{overflow:hidden}
     +'<h2 id="gateH">회원 코드를 입력하세요</h2><p>멤버 방에 공지한 코드를 입력한 회원만 볼 수 있습니다. 코드는 이 기기에 저장됩니다.</p>'
     +'<div class="gate-row"><input id="gateCode" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="회원 코드" placeholder="회원 코드"><button type="submit" class="pill">열기</button></div>'
     +'<p class="gate-err" id="gateErr" role="alert"></p></form></div>');
-  // ask for a code and settle with the one that opens the record; one that does not is asked about again
-  function ask(){
+  // ask for a code and settle with the one that opens the record; one that does not is asked about again. A device
+  // whose code has stopped opening it has lived through a change of code, and the gate says so where it would show an error
+  function ask(changed){
     return new Promise(done=>{
       const gate=document.getElementById('gate'), input=document.getElementById('gateCode'), err=document.getElementById('gateErr'), form=document.getElementById('gateForm');
-      gate.hidden=false; document.body.classList.add('gated'); err.textContent=''; input.value=''; input.disabled=false;
+      gate.hidden=false; document.body.classList.add('gated'); input.value=''; input.disabled=false;
+      err.textContent=changed?'회원 코드가 변경되었습니다. 멤버 방에 공지된 새 코드를 입력하세요.':''; err.classList.toggle('note',changed);
       const attempt=async e=>{
         e.preventDefault();
         const code=input.value.trim(); if(!code){ input.focus(); return; }
         input.disabled=true;
         try{ await open(record,code); form.removeEventListener('submit',attempt); gate.hidden=true; document.body.classList.remove('gated'); done(code); }
-        catch(x){ input.disabled=false; input.select(); err.textContent='코드가 맞지 않습니다. 멤버 방의 공지에서 코드를 확인하세요.'; }
+        catch(x){ input.disabled=false; input.select(); err.classList.remove('note'); err.textContent='코드가 맞지 않습니다. 멤버 방의 공지에서 코드를 확인하세요.'; }
       };
       form.addEventListener('submit',attempt);
       setTimeout(()=>input.focus(),0);
@@ -656,10 +660,10 @@ body.gated{overflow:hidden}
   }
   // the code kept on this device when it still opens the record, otherwise a new one typed at the gate
   async function unlock(){
-    let code=null; try{ code=localStorage.getItem(CODE); }catch(e){ code=null; }
+    let code=null, lapsed=false; try{ code=localStorage.getItem(CODE); }catch(e){ code=null; }
     for(;;){
-      if(code){ try{ return {code,value:await open(record,code)}; }catch(e){ try{ localStorage.removeItem(CODE); }catch(x){} code=null; } }
-      code=await ask();
+      if(code){ try{ return {code,value:await open(record,code)}; }catch(e){ try{ localStorage.removeItem(CODE); }catch(x){} code=null; lapsed=true; } }
+      code=await ask(lapsed); lapsed=false;
       try{ localStorage.setItem(CODE,code); }catch(e){}
     }
   }
@@ -674,6 +678,9 @@ body.gated{overflow:hidden}
       // nothing is published yet: the page says so and asks for nothing
       if(!record) return null;
       const {code,value}=await unlock();
+      // the prices go where the page looks for them. Where none open — the file is missing, or is still under the code
+      // before a change of it — the page finds empty places there, and shows each position the price saved with it
+      const f=window.FMP; if(f){ f.quote=f.quote||{}; f.closes=f.closes||{}; f.live=f.live||{}; }
       if(held){ try{ place(await open(held,code)); }catch(e){ held=null; } }
       return value;
     }
