@@ -28,6 +28,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       pushed: ${{ steps.publish.outputs.pushed }}
+      sha: ${{ steps.publish.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -51,9 +52,11 @@ jobs:
           git pull --rebase --quiet origin main
           git push --quiet origin main
           echo "pushed=yes" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   deploy:
-    # the site as it stands after the refresh: what the Pages workflow does, in the same turn
+    # the site as it stands after the refresh: what the Pages workflow does, in the same turn. Checked out at the commit
+    # the refresh pushed — left to itself, a checkout takes the commit the run was started from, before the refresh
     needs: refresh
     if: needs.refresh.outputs.pushed == 'yes'
     runs-on: ubuntu-latest
@@ -66,6 +69,8 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.refresh.outputs.sha }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
