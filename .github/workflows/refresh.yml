@@ -1,0 +1,74 @@
+# Fetches the dashboard's market data, so that no PC needs to be on:
+#   · twice a day — after New York's close (Tue-Sat 06:30 Korean time) and after the Asian closes (Mon-Fri 18:30);
+#     GitHub reads the clock in UTC, and starts a scheduled run a little late now and then;
+#   · whenever the admin page's button asks, and from the PC after a save that changed the record.
+# The keys are the repository's secrets, and the tools are copies the PC keeps in step (tools/repo-tools.js). What is
+# held is read out of the sealed record, so a position added in the admin page is followed from the next run on.
+# The run commits the two data files and deploys the site itself: a push made with the token a workflow runs under
+# starts no other workflow, so the Pages workflow would not wake for it.
+name: Refresh market data
+on:
+  schedule:
+    - cron: '30 21 * * 1-5'
+    - cron: '30 9 * * 1-5'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# one refresh at a time, and none cancelled
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      pushed: ${{ steps.publish.outputs.pushed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Fetch the prices and write the two files
+        env:
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+          KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+          JETTI_MEMBER_KEY: ${{ secrets.MEMBER_KEY }}
+        run: node tools/refresh-market.js
+      - id: publish
+        name: Commit them and push
+        run: |
+          git config user.name "jettiy"
+          git config user.email "245803399+jettiy@users.noreply.github.com"
+          git add position-dashboard-data-v3.js position-dashboard-held-v3.js
+          if git diff --cached --quiet; then echo "pushed=no" >> "$GITHUB_OUTPUT"; echo "nothing changed"; exit 0; fi
+          git commit -q -m "market data - $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git pull --rebase --quiet origin main
+          git push --quiet origin main
+          echo "pushed=yes" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    # the site as it stands after the refresh: what the Pages workflow does, in the same turn
+    needs: refresh
+    if: needs.refresh.outputs.pushed == 'yes'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # deploys take their turn with the Pages workflow's
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
