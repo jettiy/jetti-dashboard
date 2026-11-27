@@ -5,7 +5,9 @@
 # The keys are the repository's secrets, and the tools are copies the PC keeps in step (tools/repo-tools.js). What is
 # held is read out of the sealed record, so a position added in the admin page is followed from the next run on.
 # The run commits the two data files and deploys the site itself: a push made with the token a workflow runs under
-# starts no other workflow, so the Pages workflow would not wake for it.
+# starts no other workflow, so the Pages workflow would not wake for it. It deploys at the commit it pushed — left to
+# itself a checkout takes the commit the run was started from — and it deploys every time, even when the prices had not
+# moved, so that a deploy that failed on a former run is made good by the next.
 name: Refresh market data
 on:
   schedule:
@@ -27,7 +29,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      pushed: ${{ steps.publish.outputs.pushed }}
       sha: ${{ steps.publish.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
@@ -47,18 +48,16 @@ jobs:
           git config user.name "jettiy"
           git config user.email "245803399+jettiy@users.noreply.github.com"
           git add position-dashboard-data-v3.js position-dashboard-held-v3.js
-          if git diff --cached --quiet; then echo "pushed=no" >> "$GITHUB_OUTPUT"; echo "nothing changed"; exit 0; fi
-          git commit -q -m "market data - $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          git pull --rebase --quiet origin main
-          git push --quiet origin main
-          echo "pushed=yes" >> "$GITHUB_OUTPUT"
+          if ! git diff --cached --quiet; then
+            git commit -q -m "market data - $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git pull --rebase --quiet origin main
+            git push --quiet origin main
+          fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   deploy:
-    # the site as it stands after the refresh: what the Pages workflow does, in the same turn. Checked out at the commit
-    # the refresh pushed — left to itself, a checkout takes the commit the run was started from, before the refresh
+    # the site as the repository stands after the refresh: what the Pages workflow does, in the same turn
     needs: refresh
-    if: needs.refresh.outputs.pushed == 'yes'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
